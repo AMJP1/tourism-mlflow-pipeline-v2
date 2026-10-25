@@ -23,9 +23,9 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -46,9 +46,9 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -80,9 +80,9 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -106,6 +106,8 @@ jobs:
           ls -lh tourism_project/deployment/best_pred_model_v1.joblib
 
       - name: Commit Trained Model
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
@@ -129,15 +131,15 @@ jobs:
 
             git fetch origin main
 
-            if git rebase origin/main; then
-              if git push origin HEAD:main; then
-                echo "Model successfully pushed."
-                exit 0
-              fi
-            else
+            if ! git rebase origin/main; then
               echo "Rebase conflict detected. Stopping safely."
               git rebase --abort
               exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              echo "Model successfully pushed."
+              exit 0
             fi
 
             echo "Push rejected. Retrying..."
