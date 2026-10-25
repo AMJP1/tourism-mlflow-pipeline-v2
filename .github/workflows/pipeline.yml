@@ -1,6 +1,10 @@
 
 name: Tourism Project Pipeline
 
+concurrency:
+  group: tourism-pipeline-main
+  cancel-in-progress: false
+
 on:
   push:
     branches:
@@ -14,14 +18,22 @@ jobs:
   register-dataset:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r tourism_project/requirements.txt
+
       - name: Register Dataset
         run: python tourism_project/model_building/data_register.py
 
@@ -29,16 +41,25 @@ jobs:
     needs: register-dataset
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r tourism_project/requirements.txt
+
       - name: Run Data Preparation
         run: python tourism_project/model_building/prep.py
+
       - name: Upload Train Test Splits
         uses: actions/upload-artifact@v4
         with:
@@ -54,35 +75,74 @@ jobs:
     needs: data-prep
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r tourism_project/requirements.txt
+
       - name: Download Train Test Splits
         uses: actions/download-artifact@v4
         with:
           name: data-splits
           path: .
+
       - name: Train Model
         run: python tourism_project/model_building/train.py
+
       - name: Verify Model File
         run: |
           test -f tourism_project/deployment/best_pred_model_v1.joblib
           ls -lh tourism_project/deployment/best_pred_model_v1.joblib
+
       - name: Commit Trained Model
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin main
-          git add tourism_project/deployment/best_pred_model_v1.joblib
+          MODEL_FILE="tourism_project/deployment/best_pred_model_v1.joblib"
 
-          git diff --cached --quiet || git commit -m "Update trained tourism model [skip ci]"
+          test -f "$MODEL_FILE"
+          git add "$MODEL_FILE"
 
-          git pull --rebase origin main
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo "No model changes to commit."
+            exit 0
+          fi
 
+          git commit -m "Update trained tourism model [skip ci]"
+
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt"
+
+            git fetch origin main
+
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                echo "Model successfully pushed."
+                exit 0
+              fi
+            else
+              echo "Rebase conflict detected. Stopping safely."
+              git rebase --abort
+              exit 1
+            fi
+
+            echo "Push rejected. Retrying..."
+            sleep 2
+          done
+
+          echo "Failed to push after 3 attempts."
+          exit 1
