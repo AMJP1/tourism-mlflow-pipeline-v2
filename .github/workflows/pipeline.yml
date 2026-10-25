@@ -79,4 +79,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add tourism_project/deployment/best_pred_model_v1.joblib
           git diff --cached --quiet || git commit -m "Update trained tourism model [skip ci]"
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
