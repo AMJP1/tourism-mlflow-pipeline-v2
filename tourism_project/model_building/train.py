@@ -102,7 +102,18 @@ with mlflow.start_run():
 
     # Save next to app.py so the Streamlit app can load it directly, and log
     # it as an MLflow artifact for traceability
-    model_path = "tourism_project/deployment/best_pred_model_v1.joblib"
-    joblib.dump(best_model, model_path)
-    mlflow.log_artifact(model_path, artifact_path="model")
-    print(f"Model saved to {model_path}")
+    
+# Save the trained pipeline where the Streamlit app expects it
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+MODEL_PATH = PROJECT_DIR / "deployment" / "best_pred_model_v1.joblib"
+MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+joblib.dump(best_model, MODEL_PATH)
+
+# Log the saved model as an MLflow artifact
+mlflow.log_artifact(str(MODEL_PATH), artifact_path="model")
+
+print(f"Model saved to: {MODEL_PATH}")
+print(f"Model file exists: {MODEL_PATH.exists()}")
